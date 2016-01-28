@@ -87,9 +87,6 @@ public class OrientDBClient extends DB {
       if (!db.getMetadata().getSchema().existsClass(CLASS)) {
         db.getMetadata().getSchema().createClass(CLASS);
       }
-
-      db.declareIntent(new OIntentMassiveInsert());
-
     } catch (Exception e1) {
       System.err.println("Could not initialize OrientDB connection pool for Loader: " + e1.toString());
       e1.printStackTrace();
