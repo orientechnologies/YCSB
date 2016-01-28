@@ -6,11 +6,10 @@
 
 package com.yahoo.ycsb.db;
 
+import com.orientechnologies.orient.core.db.OPartitionedDatabasePool;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
-import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.dictionary.ODictionary;
 import com.orientechnologies.orient.core.index.OIndexCursor;
-import com.orientechnologies.orient.core.intent.OIntentMassiveInsert;
 import com.orientechnologies.orient.core.record.ORecord;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.yahoo.ycsb.*;
@@ -21,6 +20,7 @@ import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.Set;
 import java.util.Vector;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * OrientDB client for YCSB framework.
@@ -37,8 +37,8 @@ import java.util.Vector;
 public class OrientDBClient extends DB {
 
   private static final String CLASS = "usertable";
-  private ODatabaseDocumentTx  db;
-  private ODictionary<ORecord> dictionary;
+
+  private static AtomicReference<OPartitionedDatabasePool> databasePool = new AtomicReference<>();
 
   /**
    * Initialize any state for this DB. Called once per DB instance; there is one DB instance per client thread.
@@ -68,7 +68,7 @@ public class OrientDBClient extends DB {
     try {
       System.out.println("OrientDB loading database url = " + url);
 
-      db = new ODatabaseDocumentTx(url);
+      final ODatabaseDocumentTx db = new ODatabaseDocumentTx(url);
       if (db.exists()) {
         db.open(user, password);
         if (newdb) {
@@ -82,10 +82,16 @@ public class OrientDBClient extends DB {
       }
 
       System.out.println("OrientDB connection created with " + url);
-
-      dictionary = db.getMetadata().getIndexManager().getDictionary();
       if (!db.getMetadata().getSchema().existsClass(CLASS)) {
         db.getMetadata().getSchema().createClass(CLASS);
+      }
+
+      if (databasePool.get() == null) {
+        final OPartitionedDatabasePool pool = new OPartitionedDatabasePool(url, user, password);
+
+        if (!databasePool.compareAndSet(null, pool)) {
+          pool.close();
+        }
       }
     } catch (Exception e1) {
       System.err.println("Could not initialize OrientDB connection pool for Loader: " + e1.toString());
@@ -96,25 +102,23 @@ public class OrientDBClient extends DB {
 
   @Override
   public void cleanup() throws DBException {
-    if (db != null) {
-      db.close();
-      db = null;
-    }
   }
 
-  @Override
   /**
    * Insert a record in the database. Any field/value pairs in the specified values
    * HashMap will be written into the record with the specified
    * record key.
    *
-   * @param table The name of the table
-   * @param key The record key of the record to insert.
+   * @param table  The name of the table
+   * @param key    The record key of the record to insert.
    * @param values A HashMap of field/value pairs to insert in the record
    * @return Zero on success, a non-zero error code on error.
    * See this class's description for a discussion of error codes.
-   */ public Status insert(String table, String key, HashMap<String, ByteIterator> values) {
-    try {
+   */
+  @Override
+  public Status insert(String table, String key, HashMap<String, ByteIterator> values) {
+    final OPartitionedDatabasePool pool = databasePool.get();
+    try (ODatabaseDocumentTx db = pool.acquire()) {
       final ODocument document = new ODocument(CLASS);
 
       for (Entry<String, String> entry : StringByteIterator.getStringMap(values).entrySet()) {
@@ -122,6 +126,7 @@ public class OrientDBClient extends DB {
       }
 
       document.save();
+      final ODictionary<ORecord> dictionary = db.getMetadata().getIndexManager().getDictionary();
       dictionary.put(key, document);
 
       return Status.OK;
@@ -131,16 +136,19 @@ public class OrientDBClient extends DB {
     return Status.ERROR;
   }
 
-  @Override
   /**
    * Delete a record from the database.
    *
    * @param table The name of the table
-   * @param key The record key of the record to delete.
+   * @param key   The record key of the record to delete.
    * @return Zero on success, a non-zero error code on error.
    * See this class's description for a discussion of error codes.
-   */ public Status delete(String table, String key) {
-    try {
+   */
+  @Override
+  public Status delete(String table, String key) {
+    final OPartitionedDatabasePool pool = databasePool.get();
+    try (ODatabaseDocumentTx db = pool.acquire()) {
+      final ODictionary<ORecord> dictionary = db.getMetadata().getIndexManager().getDictionary();
       dictionary.remove(key);
       return Status.OK;
     } catch (Exception e) {
@@ -149,17 +157,20 @@ public class OrientDBClient extends DB {
     return Status.ERROR;
   }
 
-  @Override
   /**
    * Read a record from the database. Each field/value pair from the result will be stored in a HashMap.
    *
-   * @param table The name of the table
-   * @param key The record key of the record to read.
+   * @param table  The name of the table
+   * @param key    The record key of the record to read.
    * @param fields The list of fields to read, or null for all of them
    * @param result A HashMap of field/value pairs for the result
    * @return Zero on success, a non-zero error code on error or "not found".
-   */ public Status read(String table, String key, Set<String> fields, HashMap<String, ByteIterator> result) {
-    try {
+   */
+  @Override
+  public Status read(String table, String key, Set<String> fields, HashMap<String, ByteIterator> result) {
+    final OPartitionedDatabasePool pool = databasePool.get();
+    try (ODatabaseDocumentTx db = pool.acquire()) {
+      final ODictionary<ORecord> dictionary = db.getMetadata().getIndexManager().getDictionary();
       final ODocument document = dictionary.get(key);
       if (document != null) {
         if (fields != null) {
@@ -179,19 +190,22 @@ public class OrientDBClient extends DB {
     return Status.ERROR;
   }
 
-  @Override
   /**
    * Update a record in the database. Any field/value pairs in the specified values
    * HashMap will be written into the record with the specified
    * record key, overwriting any existing values with the same field name.
    *
-   * @param table The name of the table
-   * @param key The record key of the record to write.
+   * @param table  The name of the table
+   * @param key    The record key of the record to write.
    * @param values A HashMap of field/value pairs to update in the record
    * @return Zero on success, a non-zero error code on error. See this class's description f
    * or a discussion of error codes.
-   */ public Status update(String table, String key, HashMap<String, ByteIterator> values) {
-    try {
+   */
+  @Override
+  public Status update(String table, String key, HashMap<String, ByteIterator> values) {
+    final OPartitionedDatabasePool pool = databasePool.get();
+    try (ODatabaseDocumentTx db = pool.acquire()) {
+      final ODictionary<ORecord> dictionary = db.getMetadata().getIndexManager().getDictionary();
       final ODocument document = dictionary.get(key);
       if (document != null) {
         for (Entry<String, String> entry : StringByteIterator.getStringMap(values).entrySet()) {
@@ -207,25 +221,28 @@ public class OrientDBClient extends DB {
     return Status.ERROR;
   }
 
-  @Override
   /**
    * Perform a range scan for a set of records in the database.
    * Each field/value pair from the result will be stored in a HashMap.
    *
-   * @param table The name of the table
-   * @param startkey The record key of the first record to read.
+   * @param table       The name of the table
+   * @param startkey    The record key of the first record to read.
    * @param recordcount The number of records to read
-   * @param fields The list of fields to read, or null for all of them
-   * @param result A Vector of HashMaps, where each HashMap is a set field/value pairs for one record
+   * @param fields      The list of fields to read, or null for all of them
+   * @param result      A Vector of HashMaps, where each HashMap is a set field/value pairs for one record
    * @return Zero on success, a non-zero error code on error.
    * See this class's description for a discussion of error codes.
-   */ public Status scan(String table, String startkey, int recordcount, Set<String> fields,
+   */
+  @Override
+  public Status scan(String table, String startkey, int recordcount, Set<String> fields,
       Vector<HashMap<String, ByteIterator>> result) {
-    try {
+    final OPartitionedDatabasePool pool = databasePool.get();
+    try (ODatabaseDocumentTx db = pool.acquire()) {
+      final ODictionary<ORecord> dictionary = db.getMetadata().getIndexManager().getDictionary();
       final OIndexCursor entries = dictionary.getIndex().iterateEntriesMajor(startkey, true, true);
+
       while (entries.hasNext()) {
-        final Entry<Object, OIdentifiable> entry = entries.nextEntry();
-        final ODocument document = entry.getValue().getRecord();
+        final ODocument document = entries.next().getRecord();
 
         final HashMap<String, ByteIterator> map = new HashMap<>();
         result.add(map);
@@ -233,7 +250,6 @@ public class OrientDBClient extends DB {
         for (String field : fields) {
           map.put(field, new StringByteIterator((String) document.field(field)));
         }
-
       }
 
       return Status.OK;
@@ -244,6 +260,7 @@ public class OrientDBClient extends DB {
   }
 
   public ODatabaseDocumentTx getDB() {
-    return db;
+    final OPartitionedDatabasePool pool = databasePool.get();
+    return pool.acquire();
   }
 }

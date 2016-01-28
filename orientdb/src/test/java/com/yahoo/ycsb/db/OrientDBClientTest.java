@@ -209,7 +209,7 @@ public class OrientDBClientTest {
     fieldSet.add("FIELD0");
     fieldSet.add("FIELD1");
     int startIndex = 1;
-    int resultRows = 3;
+    int resultRows = 4;
 
     Vector<HashMap<String, ByteIterator>> resultVector = new Vector<>();
     orientDBClient.scan(CLASS, KEY_PREFIX + startIndex, resultRows, fieldSet, resultVector);
@@ -217,14 +217,7 @@ public class OrientDBClientTest {
     // Check the resultVector is the correct size
     assertEquals("Assert the correct number of results rows were returned", resultRows, resultVector.size());
 
-    /**
-     * Part of the known issue about the broken iterator in orientdb is that the iterator
-     * starts at index 1 instead of index 0. Because of this, to test it we must increment
-     * the start index. When that known issue has been fixed, remove the increment below.
-     * Track the issue here: https://github.com/orientechnologies/orientdb/issues/5541
-     * This fix was implemented for orientechnologies:orientdb-client:2.1.8
-     */
-    int testIndex = startIndex + 1; // <-- Remove the +1 when the known issue of broken iterator is fixed.
+    int testIndex = startIndex;
 
     // Check each vector row to make sure we have the correct fields
     for (HashMap<String, ByteIterator> result: resultVector) {
