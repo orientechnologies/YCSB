@@ -6,6 +6,7 @@
 
 package com.yahoo.ycsb.db;
 
+import com.orientechnologies.common.exception.OException;
 import com.orientechnologies.orient.core.db.OPartitionedDatabasePool;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import com.orientechnologies.orient.core.dictionary.ODictionary;
@@ -68,31 +69,35 @@ public class OrientDBClient extends DB {
     try {
       System.out.println("OrientDB loading database url = " + url);
 
-      final ODatabaseDocumentTx db = new ODatabaseDocumentTx(url);
-      if (db.exists()) {
-        db.open(user, password);
-        if (newdb) {
-          System.out.println("OrientDB drop and recreate fresh db");
-          db.drop();
-          db.create();
-        }
-      } else {
-        System.out.println("OrientDB database not found, create fresh db");
-        db.create();
-      }
-
-      System.out.println("OrientDB connection created with " + url);
-      if (!db.getMetadata().getSchema().existsClass(CLASS)) {
-        db.getMetadata().getSchema().createClass(CLASS);
-      }
-
       if (databasePool.get() == null) {
         final OPartitionedDatabasePool pool = new OPartitionedDatabasePool(url, user, password);
+        pool.setAutoCreate(true);
 
         if (!databasePool.compareAndSet(null, pool)) {
           pool.close();
         }
       }
+
+      ODatabaseDocumentTx db = new ODatabaseDocumentTx(url);
+      if (newdb && db.exists()) {
+        db.open(user, password);
+        System.out.println("OrientDB drop and recreate fresh db");
+        db.drop();
+      }
+
+      final OPartitionedDatabasePool pool = databasePool.get();
+      db = pool.acquire();
+      System.out.println("OrientDB connection created with " + url);
+      if (!db.getMetadata().getSchema().existsClass(CLASS)) {
+        try {
+          db.getMetadata().getSchema().createClass(CLASS);
+        } catch (OException e) {
+          e.printStackTrace();
+        }
+
+      }
+      db.close();
+
     } catch (Exception e1) {
       System.err.println("Could not initialize OrientDB connection pool for Loader: " + e1.toString());
       e1.printStackTrace();
