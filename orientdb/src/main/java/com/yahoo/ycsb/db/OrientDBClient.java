@@ -69,20 +69,22 @@ public class OrientDBClient extends DB {
     try {
       System.out.println("OrientDB loading database url = " + url);
 
-      if (databasePool.get() == null) {
-        final OPartitionedDatabasePool pool = new OPartitionedDatabasePool(url, user, password);
-        pool.setAutoCreate(true);
-
-        if (!databasePool.compareAndSet(null, pool)) {
-          pool.close();
-        }
-      }
-
       ODatabaseDocumentTx db = new ODatabaseDocumentTx(url);
       if (newdb && db.exists()) {
         db.open(user, password);
         System.out.println("OrientDB drop and recreate fresh db");
         db.drop();
+      }
+
+      if (!db.exists()) {
+        db.create();
+      }
+
+      db.close();
+
+      if (databasePool.get() == null) {
+        final OPartitionedDatabasePool pool = new OPartitionedDatabasePool(url, user, password);
+        databasePool.compareAndSet(null, pool);
       }
 
       final OPartitionedDatabasePool pool = databasePool.get();
