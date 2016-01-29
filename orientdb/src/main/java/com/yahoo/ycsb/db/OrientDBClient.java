@@ -82,6 +82,7 @@ public class OrientDBClient extends DB {
           db.create();
         } catch (OStorageExistsException e) {
           System.out.println("Storage was created in parallel thread");
+          db.open("admin", "admin");
         }
       } else {
         db.open("admin", "admin");
