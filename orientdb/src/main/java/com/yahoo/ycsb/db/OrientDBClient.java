@@ -82,23 +82,25 @@ public class OrientDBClient extends DB {
           db.create();
         } catch (OStorageExistsException e) {
           System.out.println("Storage was created in parallel thread");
-          db.open("admin", "admin");
         }
-      } else {
-        db.open("admin", "admin");
       }
 
       boolean schemaInitialized = false;
       while (!schemaInitialized) {
+        if (db.isClosed())
+          db.open("admin", "admin");
+
         try {
           if (!db.getMetadata().getSchema().existsClass(CLASS)) {
             db.getMetadata().getSchema().createClass(CLASS);
           }
           schemaInitialized = true;
         } catch (OSchemaNotCreatedException e) {
+          db.close();
           Thread.sleep(100);
         }
       }
+
       db.close();
 
       if (databasePool.get() == null) {
