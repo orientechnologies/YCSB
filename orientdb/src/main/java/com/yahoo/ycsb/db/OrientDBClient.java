@@ -6,7 +6,6 @@
 
 package com.yahoo.ycsb.db;
 
-import com.orientechnologies.common.exception.OException;
 import com.orientechnologies.orient.core.db.OPartitionedDatabasePool;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import com.orientechnologies.orient.core.dictionary.ODictionary;
