@@ -101,15 +101,11 @@ public class OrientDBClient extends DB {
       while (!schemaInitialized) {
         try {
           if (!db.getMetadata().getSchema().existsClass(CLASS)) {
-            try {
-              db.getMetadata().getSchema().createClass(CLASS);
-            } catch (OException e) {
-              e.printStackTrace();
-            }
+            db.getMetadata().getSchema().createClass(CLASS);
           }
           schemaInitialized = true;
         } catch (OSchemaNotCreatedException e) {
-          Thread.yield();
+          Thread.sleep(100);
         }
       }
       db.close();
