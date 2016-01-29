@@ -10,6 +10,7 @@ import com.orientechnologies.common.exception.OException;
 import com.orientechnologies.orient.core.db.OPartitionedDatabasePool;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import com.orientechnologies.orient.core.dictionary.ODictionary;
+import com.orientechnologies.orient.core.exception.OStorageExistsException;
 import com.orientechnologies.orient.core.index.OIndexCursor;
 import com.orientechnologies.orient.core.record.ORecord;
 import com.orientechnologies.orient.core.record.impl.ODocument;
@@ -77,7 +78,11 @@ public class OrientDBClient extends DB {
       }
 
       if (!db.exists()) {
-        db.create();
+        try {
+          db.create();
+        } catch (OStorageExistsException e) {
+          System.out.println("Storage was created in parallel thread");
+        }
       }
 
       db.close();
