@@ -87,11 +87,11 @@ public class OrientDBClient extends DB {
 
       boolean schemaInitialized = false;
       while (!schemaInitialized) {
-        if (db.isClosed()) {
-          db.open("admin", "admin");
-        }
-
         try {
+          if (db.isClosed()) {
+            db.open("admin", "admin");
+          }
+
           if (!db.getMetadata().getSchema().existsClass(CLASS)) {
             db.getMetadata().getSchema().createClass(CLASS);
           }
