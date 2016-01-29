@@ -10,6 +10,7 @@ import com.orientechnologies.common.exception.OException;
 import com.orientechnologies.orient.core.db.OPartitionedDatabasePool;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import com.orientechnologies.orient.core.dictionary.ODictionary;
+import com.orientechnologies.orient.core.exception.OSchemaNotCreatedException;
 import com.orientechnologies.orient.core.exception.OStorageExistsException;
 import com.orientechnologies.orient.core.index.OIndexCursor;
 import com.orientechnologies.orient.core.record.ORecord;
@@ -95,13 +96,21 @@ public class OrientDBClient extends DB {
       final OPartitionedDatabasePool pool = databasePool.get();
       db = pool.acquire();
       System.out.println("OrientDB connection created with " + url);
-      if (!db.getMetadata().getSchema().existsClass(CLASS)) {
-        try {
-          db.getMetadata().getSchema().createClass(CLASS);
-        } catch (OException e) {
-          e.printStackTrace();
-        }
 
+      boolean schemaInitialized = false;
+      while (!schemaInitialized) {
+        try {
+          if (!db.getMetadata().getSchema().existsClass(CLASS)) {
+            try {
+              db.getMetadata().getSchema().createClass(CLASS);
+            } catch (OException e) {
+              e.printStackTrace();
+            }
+          }
+          schemaInitialized = true;
+        } catch (OSchemaNotCreatedException e) {
+          Thread.yield();
+        }
       }
       db.close();
 
