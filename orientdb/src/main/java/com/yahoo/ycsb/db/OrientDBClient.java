@@ -85,17 +85,6 @@ public class OrientDBClient extends DB {
         }
       }
 
-      db.close();
-
-      if (databasePool.get() == null) {
-        final OPartitionedDatabasePool pool = new OPartitionedDatabasePool(url, user, password);
-        databasePool.compareAndSet(null, pool);
-      }
-
-      final OPartitionedDatabasePool pool = databasePool.get();
-      db = pool.acquire();
-      System.out.println("OrientDB connection created with " + url);
-
       boolean schemaInitialized = false;
       while (!schemaInitialized) {
         try {
@@ -108,6 +97,11 @@ public class OrientDBClient extends DB {
         }
       }
       db.close();
+
+      if (databasePool.get() == null) {
+        final OPartitionedDatabasePool pool = new OPartitionedDatabasePool(url, user, password);
+        databasePool.compareAndSet(null, pool);
+      }
 
     } catch (Exception e1) {
       System.err.println("Could not initialize OrientDB connection pool for Loader: " + e1.toString());
