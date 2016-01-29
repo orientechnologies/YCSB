@@ -97,15 +97,17 @@ public class OrientDBClient extends DB {
           }
           schemaInitialized = true;
         } catch (OSchemaNotCreatedException e) {
-          if (!db.isClosed())
+          if (!db.isClosed()) {
             db.close();
+          }
 
           Thread.sleep(100);
         }
       }
 
-      if (!db.isClosed())
+      if (!db.isClosed()) {
         db.close();
+      }
 
       if (databasePool.get() == null) {
         final OPartitionedDatabasePool pool = new OPartitionedDatabasePool(url, user, password);
